@@ -1,74 +1,67 @@
+import pickle
 import socket
+import threading
 
-from utils import scale_image, blit_text_center
-from game import game_info, car
 
-pygame.font.init()
+class Server:
+    def __init__(self):
+        self.host = "0.0.0.0"  # Listen on all available network interfaces
+        self.port = 9999
+        self.max_connections = 2
+        self.current_connections = 0
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.clients = []
+        self.p1_start_pos = (180, 200)
+        self.p2_start_pos = (150, 200)
 
-GRASS = scale_image(pygame.image.load("../assets/grass.jpg"), 2.5)
-TRACK = scale_image(pygame.image.load("../assets/track.png"), 0.9)
+    def start(self):
+        self.server_socket.bind((self.host, self.port))
+        self.server_socket.listen(self.max_connections)
+        ip = socket.gethostbyname(socket.gethostname())
+        print(f"Server is listening for connections on {ip}:{self.port}...")
+        while True:
+            client_socket, address = self.server_socket.accept()
+            if self.current_connections < self.max_connections:
+                self.current_connections += 1
+                print(f"Connection from {address} accepted.")
+                client_handler = threading.Thread(
+                    target=self.handle_client, args=(client_socket,)
+                )
+                client_handler.start()
+                self.clients.append(client_socket)
+                if self.current_connections == self.max_connections:
+                    print("Maximum number of connections reached. Game can start now.")
+            else:
+                print(
+                    "Maximum number of connections reached. Rejecting new connection."
+                )
+                client_socket.close()
 
-TRACK_BORDER = scale_image(pygame.image.load("../assets/track-border.png"), 0.9)
-TRACK_BORDER_MASK = pygame.mask.from_surface(TRACK_BORDER)
+    def handle_client(self, client_socket):
+        client_socket.send(str.encode(str(self.current_connections - 1)))
+        while True:
+            try:
+                message = client_socket.recv(1024)
+                print("Received:", message)
+                if message:
+                    car = pickle.loads(message)
+                    self.broadcast(car)
+            except Exception as e:
+                print("Error occurred:", e)
+                break
 
-FINISH = pygame.image.load("../assets/finish.png")
-FINISH_MASK = pygame.mask.from_surface(FINISH)
-FINISH_POSITION = (130, 250)
+        client_socket.close()
+        self.current_connections -= 1
+        print("Client disconnected.")
 
-# PLAYER 1 CONSTANTS
-RED_CAR = scale_image(pygame.image.load("../assets/red-car.png"), 0.55)
-P1_START_POS = (180, 200)
+    def broadcast(self, car):
+        for client in self.clients:
+            try:
+                client.sendall(pickle.dumps(car))
+            except Exception as e:
+                print("Error broadcasting message to client:", e)
 
-# PLAYER 1 CONSTANTS
-GREEN_CAR = scale_image(pygame.image.load("../assets/green-car.png"), 0.55)
-P1_START_POS = (150, 200)
 
-WIDTH, HEIGHT = TRACK.get_width(), TRACK.get_height()
-WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Racing Game!")
-
-MAIN_FONT = pygame.font.SysFont("comicsans", 44)
-
-FPS = 60
-
-game_info = game_info.GameInfo()
-
-def handle_client(conn, player):
-    while True:
-        data = conn.recv(1024).decode()
-        if not data:
-            print("Player", player, "disconnected")
-            break
-        print("Received from Player", player, ":", data)
-        # Process received data, implement game logic here
-        # Send response to the other player
-        other_player = 2 if player == 1 else 1
-        other_conn.sendall(data.encode())
-
-# Create a TCP/IP socket
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-# Bind the socket to the address and port
-server_address = ('localhost', 8888)
-sock.bind(server_address)
-
-# Listen for incoming connections
-sock.listen(2)
-
-print("Waiting for two players...")
-
-# Accept connections from two players
-conn1, addr1 = sock.accept()
-print("Player 1 connected from", addr1)
-conn2, addr2 = sock.accept()
-print("Player 2 connected from", addr2)
-
-# Start handling the game for each player in separate threads or processes
-# You can use threading or multiprocessing modules for this purpose
-# For simplicity, let's handle each player in the main thread for now
-handle_client(conn1, 1)
-handle_client(conn2, 2)
-
-# Close the main listening socket
-sock.close()
-
+if __name__ == "__main__":
+    server = Server()
+    server.start()

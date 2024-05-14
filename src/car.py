@@ -4,8 +4,18 @@ import pygame
 
 from utils import blit_rotate_center
 
+
+class CarData:
+    def __init__(self, id, x, y, angle):
+        self.id = id
+        self.x = x
+        self.y = y
+        self.angle = angle
+
+
 class Car:
-    def __init__(self, max_vel, rotation_vel, img, start_pos):
+    def __init__(self, max_vel, rotation_vel, img, start_pos, id):
+        self.id = id
         self.img = img
         self.max_vel = max_vel
         self.vel = 0
@@ -28,7 +38,7 @@ class Car:
         self.move()
 
     def move_backward(self):
-        self.vel = max(self.vel - self.acceleration, -self.max_vel/2)
+        self.vel = max(self.vel - self.acceleration, -self.max_vel / 2)
         self.move()
 
     def move(self):
@@ -45,11 +55,6 @@ class Car:
         poi = mask.overlap(car_mask, offset)
         return poi
 
-    def reset(self):
-        self.x, self.y = self.START_POS
-        self.angle = 0
-        self.vel = 0
-
     def reduce_speed(self):
         self.vel = max(self.vel - self.acceleration / 2, 0)
         self.move()
@@ -57,3 +62,11 @@ class Car:
     def bounce(self):
         self.vel = -self.vel
         self.move()
+
+    def get_abstract_data(self):
+        return CarData(self.id, self.x, self.y, self.angle)
+
+    def set_abstract_data(self, data):
+        self.x = data.x
+        self.y = data.y
+        self.angle = data.angle
